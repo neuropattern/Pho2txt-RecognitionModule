@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+import pytesseract
+from imutils.object_detection import non_max_suppression
 from skimage.filters import (threshold_sauvola)
 
 IMAGE_WIDTH = 320
@@ -8,6 +10,7 @@ LAYER_NAMES = ["feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"]
 MIN_CONFIDENCE = 0.5
 NET_MODEL_NAME = "east_model.pb"
 NO_SCALING_CONST = 1.0
+TESSERACT_CONFIG = "-l eng --oem 1 --psm 8"
 
 
 def binarization(img_path, arg):
@@ -27,6 +30,38 @@ def custom_threshold(img):
     thr_img = threshold_sauvola(img, window_size=25)
     bin_img = thr_img > img
     return thr_img
+
+
+def text_recognition(img_path, rects, confidence):
+    orig = cv2.imread(img_path, 0)
+
+    (height, width) = orig.shape[:2]
+    ratio_w = width / float(IMAGE_WIDTH)
+    ratio_h = height / float(IMAGE_HEIGHT)
+
+    boxes = non_max_suppression(np.array(rects), probs=confidence)
+    boxes = sorted(boxes, key=lambda r: r[1])
+
+    text = ""
+    for (start_x, start_y, end_x, end_y) in boxes:
+        start_x = int(start_x * ratio_w)
+        start_y = int(start_y * ratio_h)
+        end_x = int(end_x * ratio_w)
+        end_y = int(end_y * ratio_h)
+
+        d_x = int((end_x - start_x) * 0.01)
+        d_y = int((end_y - start_y) * 0.01)
+
+        start_x = max(0, start_x - d_x)
+        start_y = max(0, start_y - d_y)
+        end_x = min(width, end_x + (d_x * 1))
+        end_y = min(height, end_y + (d_y * 1))
+
+        roi = orig[start_y:end_y, start_x:end_x]
+        string = pytesseract.image_to_string(roi, config=TESSERACT_CONFIG) + ' '
+        text += string
+
+    return text
 
 
 def text_detection(img_path):
