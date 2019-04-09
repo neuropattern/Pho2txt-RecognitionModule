@@ -13,8 +13,11 @@ NO_SCALING_CONST = 1.0
 TESSERACT_CONFIG = "-l eng --oem 1 --psm 8"
 
 
-def binarization(img_path, arg):
-    img = cv2.imread(img_path, 0)
+def filtration():
+    pass
+
+
+def binarization(img, arg):
     if arg == 'ot':
         img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
     elif arg == "atm":
@@ -32,10 +35,8 @@ def custom_threshold(img):
     return thr_img
 
 
-def text_recognition(img_path, rects, confidence):
-    orig = cv2.imread(img_path, 0)
-
-    (height, width) = orig.shape[:2]
+def text_recognition(img, rects, confidence):
+    (height, width) = img.shape[:2]
     ratio_w = width / float(IMAGE_WIDTH)
     ratio_h = height / float(IMAGE_HEIGHT)
 
@@ -57,20 +58,14 @@ def text_recognition(img_path, rects, confidence):
         end_x = min(width, end_x + (d_x * 1))
         end_y = min(height, end_y + (d_y * 1))
 
-        roi = orig[start_y:end_y, start_x:end_x]
+        roi = img[start_y:end_y, start_x:end_x]
         string = pytesseract.image_to_string(roi, config=TESSERACT_CONFIG) + ' '
         text += string
 
     return text
 
 
-def text_detection(img_path):
-    img = cv2.imread(img_path)
-    orig = img.copy()
-
-    (height, width) = img.shape[:2]
-    ratio_w = width / float(IMAGE_WIDTH)
-    ratio_h = height / float(IMAGE_HEIGHT)
+def text_detection(img):
     img = cv2.resize(img, (IMAGE_WIDTH, IMAGE_HEIGHT))
     height, width = IMAGE_HEIGHT, IMAGE_WIDTH
 
@@ -112,3 +107,12 @@ def text_detection(img_path):
             data.clear()
 
     return rects, confidence
+
+
+def to_txt(img_name, arg):
+    img = cv2.imread(img_name)
+    filtration()
+    binarization(img, arg)
+    (rects, confidence) = text_detection(img)
+    text = text_recognition(img, rects, confidence)
+    return text
