@@ -4,6 +4,7 @@ import pytesseract
 from imutils.object_detection import non_max_suppression
 from nms import (felzenszwalb, fast, malisiewicz, nms)
 from skimage.filters import (threshold_sauvola)
+import retinex
 
 IMAGE_WIDTH = 320
 IMAGE_HEIGHT = 320
@@ -14,8 +15,28 @@ NO_SCALING_CONST = 1.0
 TESSERACT_CONFIG = "-l eng --oem 1 --psm 8"
 
 
-def filtration():
-    pass
+def filtration(img_name):
+    src = cv.imread(img_name, cv.IMREAD_COLOR)
+
+    if src is None:
+        print('Error opening image')
+        return -1
+
+    # Remove noise by blurring with a Gaussian filter
+    src = cv.GaussianBlur(src, (3, 3), 0)
+
+    with open('config.json', 'r') as f:
+        config = json.load(f)
+
+    img_msrcp = MSRCP(
+        src,
+        config['sigma_list'],
+        config['low_clip'],
+        config['high_clip']
+    )
+
+    cv.imwrite('filtered.png', img_msrcp)
+    return img_msrcp
 
 
 def binarization(img, arg):
