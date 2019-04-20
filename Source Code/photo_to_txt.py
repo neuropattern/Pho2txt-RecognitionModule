@@ -1,10 +1,13 @@
+import json
+
 import cv2
 import numpy as np
 import pytesseract
-from imutils.object_detection import non_max_suppression
 from nms import (felzenszwalb, fast, malisiewicz, nms)
 from skimage.filters import (threshold_sauvola)
-import retinex
+
+from filtration import retinex
+from utils import utils
 
 IMAGE_WIDTH = 320
 IMAGE_HEIGHT = 320
@@ -16,26 +19,25 @@ TESSERACT_CONFIG = "-l eng --oem 1 --psm 8"
 
 
 def filtration(img_name):
-    src = cv.imread(img_name, cv.IMREAD_COLOR)
+    src = cv2.imread(img_name, cv2.IMREAD_COLOR)
 
     if src is None:
         print('Error opening image')
         return -1
 
-    # Remove noise by blurring with a Gaussian filter
-    src = cv.GaussianBlur(src, (3, 3), 0)
+    src = cv2.GaussianBlur(src, (3, 3), 0)
 
     with open('config.json', 'r') as f:
         config = json.load(f)
 
-    img_msrcp = MSRCP(
+    img_msrcp = retinex.MSRCP(
         src,
         config['sigma_list'],
         config['low_clip'],
         config['high_clip']
     )
 
-    cv.imwrite('filtered.png', img_msrcp)
+    cv2.imwrite('filtered.png', img_msrcp)
     return img_msrcp
 
 
@@ -116,12 +118,23 @@ def text_detection(img):
         indicies = np.array(indicies).reshape(-1)
         draw_rects = np.array(rects)[indicies]
 
-        draw_box(orig, draw_rects)
+    (ratio_width, ratio_height) = get_image_ratio(orig)
+    polygons = utils.rects2polys(rects, thetas, offsets, ratio_width, ratio_height)
 
-        #cv2.imshow("d", orig)
-        #cv2.waitKey(0)
+    for i, function in enumerate(functions):
+        indicies = nms.polygons(polygons, confidences, nms_function=function, confidence_threshold=MIN_CONFIDENCE,
+                                nsm_threshold=0.4)
+        indicies = np.array(indicies).reshape(-1)
+        draw_polys = np.array(polygons)[indicies]
 
     return rects, confidences
+
+
+def draw_polygons(img, polygons, ratioWidth, ratioHeight, color=(0, 0, 255), width=1):
+    for polygon in polygons:
+        pts = np.array(polygon, np.int32)
+        pts = pts.reshape((-1, 1, 2))
+        cv2.polylines(img, [pts], True, color, width)
 
 
 def handle_detection_results(scores, geometry):
@@ -180,14 +193,8 @@ def draw_box(img, boxes):
 
 def to_txt(img_name, arg):
     img = cv2.imread(img_name)
-    filtration()
+    filtration(img)
     binarization(img, arg)
     (rects, confidence) = text_detection(img)
-    boxes = non_max_suppression(np.array(rects), probs=confidence)
-    #show_boundaries(img, boxes)
-    #text = text_recognition(img, boxes)
-    text = "temp"
+    text = text_recognition(img, rects)
     return text
-
-
-#print(to_txt("text.png", 'ta'))
